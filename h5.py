@@ -1,6 +1,9 @@
 import numpy as np
 import h5py
-
+import warnings
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore', category=RuntimeWarning)
+warnings.filterwarnings('ignore', category=FutureWarning)
 import os, sys, select, time
 
 from threading import Thread
@@ -262,7 +265,7 @@ class H5DataLoader(Systems):
         if msg.mtype == 'H5_PREV_GROUP':
             self.prevGroup()
             self.returnGroupKeys(self.currentGroup)
-            box = boxWindow(size=(int(self.h-5), int(self.w/2)), pos=(int(1),int(self.w/4)), level=1, name='Main', data=self.ActiveKeys)
+            box = boxWindow(size=(int(self.h-5), int(self.w/4)), pos=(int(1),int(1)), level=1, name='Main', data=self.ActiveKeys)
             #box = boxWindow(size=(int(self.h/4), int(self.w/4)), pos=(0,0), level=1, name='New', data=self.ActiveKeys)
             msg = Msg('new_box', mtype='NEW_BOX', code=box)
             self.SendMessage(msg)
@@ -280,6 +283,7 @@ class H5DataLoader(Systems):
                 pass
             # We'll just check to see if it's a group.  Otherwise, it's a dataset.
             try:
+                # This shouldn't really be happening unless we ACTUALLY change groups.  But hey...
                 self.returnGroupKeys(self.currentGroup)
                 box = boxWindow(size=(int(self.h-5), int(self.w/4)), pos=(int(1),int(1)), level=1, name='Main', data=self.ActiveKeys)
             except:
@@ -358,12 +362,14 @@ class TerminalPrinter(Systems):
                             self.ActiveBox().move_right()
                     elif msg.code.code == self.terminal.KEY_DOWN:
                         if self.csr[0] + 1 < self.ActiveBox().pos[0] + self.ActiveBox().size[0] - 1:
-                            self.csr = (self.csr[0] + 1, self.csr[1])
+                            if self.csr[0] + 1 - self.ActiveBox().pos[0] <= self.ActiveBox().y_items:
+                                self.csr = (self.csr[0] + 1, self.csr[1])
                         else:
                             self.ActiveBox().move_down()
                     elif msg.code.code == self.terminal.KEY_UP:
                         if self.csr[0] - 1 > self.ActiveBox().pos[0]:
-                            self.csr = (self.csr[0] - 1, self.csr[1])
+                            if self.csr[0] - 1 - self.ActiveBox().pos[0] >= 0:
+                                self.csr = (self.csr[0] - 1, self.csr[1])
                         else:
                             self.ActiveBox().move_up()
         elif msg.mtype == 'MOVE_CURSOR':
@@ -389,9 +395,10 @@ class TerminalPrinter(Systems):
                     box.damaged = False
 
     def clearBox(self, box):
-        for y in range(0, box.size[0]):
-            for x in range(0, box.size[1]):
-                print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + ' ')
+        # but not the frame!
+        for y in range(1, box.size[0]-1):
+            for x in range(1, box.size[1]-1):
+                print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '.')
 
     def drawBox(self, box):
         for y in range(0, box.size[0]+1):
@@ -442,15 +449,19 @@ class TerminalPrinter(Systems):
         y = 1
         x = 1
         # Data is a numpy array.  We can't sort through it the normal way; instead, we want to print it item by item.
+        stringToPrint = ''
         for line in data:
             for item in line:
                 # Our box should ultimately have a 'cell', and we just jump to cell coordinates.  Eventually.
-                # That is, we don't hold more than we can show in the box at any given time.
-                for x in range(0, 2):
-                    if len(item) < box.size[1]:
-                        print(self.terminal.move(y+box.pos[0],int(x*box.size[1]/2)+box.pos[1]) + str(item))
-                    else:
-                        print(self.terminal.move(y+box.pos[0],int(x*box.size[1]/2)+box.pos[1]) + str(item[0:box.size[1]]))
+                #for x in range(0, box.cells):
+                item = '%.2e' % float(item)
+                stringToPrint += ' ' + item + ' '
+                x += 1
+                if x == box.cells:
+                    x = 1
+                    break
+            print(self.terminal.move(y+box.pos[0]+1,box.pos[1]+1) + str(stringToPrint))
+            stringToPrint = ''
             y += 1
             if y == box.size[0]-1:
                 break
@@ -494,9 +505,10 @@ class TerminalPrinter(Systems):
             while self.Run:
                 self.start_clock()
                 # Move the cursor to the current position.
-                print((self.terminal.move(self.csr[0], self.csr[1])), end='')
                 # Draw all the boxes we want to draw!
-                self.loopBoxes()
+                with self.terminal.hidden_cursor():
+                    self.loopBoxes()
+                print((self.terminal.move(self.csr[0], self.csr[1])), end='')
                 self.SortMessages()
                 self.end_clock()
                 sys.stdout.flush()
@@ -514,11 +526,17 @@ class boxWindow():
         # This coord is a little more difficult.  Just using the box size isn't good enough,
         # as we need to also limit the number of elements we show.  Ergo, let's start with... 3
         #self.x_coord = (0, self.size[1] - 1)
-        self.x_coord = (0, 3)
+        # Let's say we always want to show... oh, 4 digits.
+        # How many cells do we have?  Well, we need space, so that's 6 for each...
+        self.n_digits = 4
+        self.cells = (int(np.floor(self.size[1]/(self.n_digits+5)))) - 4
+        #self.cells = 2
+        self.x_coord = (0, self.cells)
         self.data = data
         self.damaged = True
         self.decorate = True
         self.isGrid = False
+        self.y_items = 0
         if self.data != None:
             self.sort_data()
     def sort_data(self):
@@ -531,14 +549,17 @@ class boxWindow():
             # we're a list, then!
             # We shouldn't really assume 1 dimension, but it's fine for now.
             dim = 0
+            self.y_items = len(self.data)
         # If it's two dimensions, our number of layers are 1.  Otherwise, we set
         # it to the third value.
         if dim == 2:
             self.layers = 1
+            self.y_items = self.data.shape[0]
         elif dim == 0:
             self.layers = 0
         else:
             self.layers = self.data.shape[2]
+            self.y_items = self.data.shape[0]
         # Let's set it to layer 0, here...
         self.activeLayer = 0
         self.updateDrawData()
