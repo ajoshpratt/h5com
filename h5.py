@@ -116,6 +116,8 @@ class AppState(Systems):
         self.terminal = terminal
         self.ActiveBox = None
         self.Boxes = [{}]
+        # Possible states: insert, command
+        self.State = 'insert'
     def MainLoop(self):
         # We're setting up the first box, as we start the program...
         self.h = self.terminal.height
@@ -130,28 +132,79 @@ class AppState(Systems):
             self.end_clock()
     def HandleMessage(self, msg):
         if msg.mtype == 'INPUT':
-            if msg.code == 'A':
-                msg = Msg('new_box', mtype='NEW_BOX', code=boxWindow(size=(int(self.h/4), int(self.w/4)), pos=(0,0), level=2, name='New'))
-                self.SendMessage(msg)
-                # This usually has to wait, I'm afraid, so we can't pull from the Boxes list yet.  We just send in something with the proper name and level, though.
-                msg = Msg('new_box', mtype='ACTIVATE_BOX', code=boxWindow(size=(int(self.h/4), int(self.w/4)), pos=(0,0), level=2, name='New'))
-                self.SendMessage(msg)
-            elif msg.code == 'q':
-                # for the moment, kill everything.
-                self.MsgBus.KillSystems()
-                #msg = Msg('quit', mtype='QUIT', code='quit'))
+            if msg.code.code == self.terminal.KEY_ESCAPE:
+                self.State = 'command'
+            elif self.State == 'command':
+                # Move windows, if necessary.  We already know we have an input message...
+                if msg.code.code == self.terminal.KEY_LEFT:
+                    self.nextBox()
+                if msg.code.code == self.terminal.KEY_RIGHT:
+                    self.prevBox()
+
+                if msg.code == 'i':
+                    self.State = 'insert'
+                if msg.code == 'A':
+                    msg = Msg('new_box', mtype='NEW_BOX', code=boxWindow(size=(int(self.h/4), int(self.w/4)), pos=(0,0), level=1, name='New'))
+                    self.SendMessage(msg)
+                    # This usually has to wait, I'm afraid, so we can't pull from the Boxes list yet.  We just send in something with the proper name and level, though.
+                    msg = Msg('new_box', mtype='ACTIVATE_BOX', code=boxWindow(size=(int(self.h/4), int(self.w/4)), pos=(0,0), level=1, name='New'))
+                    self.SendMessage(msg)
+                if msg.code == 'q':
+                    self.MsgBus.KillSystems()
+                if msg.code == 'P':
+                    string = 'Hey!  This is a test message that we are sending when something happens.  Can I write to the correct window?  LET US FIND OUT.'
+                    msg = Msg('print_data', mtype='PRINT_DATA', code={ 'box': self.ActiveBox, 'data': string })
+                    self.SendMessage(msg)
+            elif self.State == 'insert':
+                    if msg.code.code == None:
+                        # We're just handling raw input, here.
+                        msg = Msg('print_data', mtype='PRINT_CHAR', code={ 'box': self.ActiveBox, 'data': msg.code })
+                        self.SendMessage(msg)
+
+
         elif msg.mtype == 'ACTIVATE_BOX':
             # Stored in the code is the box object information
             self.activateBox(msg.code)
         elif msg.mtype == 'NEW_BOX':
             # Stored in the code is the box object information
             self.registerNewBox(msg.code)
+
+    def nextBox(self):
+        stop_next = False
+        level = self.ActiveBox.level - 1
+        if len(self.Boxes[level]) > 1:
+            for box in self.Boxes[level].values():
+                if stop_next == True:
+                    msg = Msg('activate_box', mtype='ACTIVATE_BOX', code=box)
+                    self.SendMessage(msg)
+                    stop_next = False
+                if self.ActiveBox.name == box.name:
+                    stop_next = True
+
+    def prevBox(self):
+        stop_now = False
+        level = self.ActiveBox.level - 1
+        returnBox = None
+        if len(self.Boxes[level]) > 1:
+            for box in self.Boxes[level].values():
+                if self.ActiveBox.name == box.name:
+                    stop_now = True
+                    if returnBox == None:
+                        returnBox = box
+                if stop_now == True:
+                    msg = Msg('activate_box', mtype='ACTIVATE_BOX', code=returnBox)
+                    self.SendMessage(msg)
+                    stop_now = False
+                returnBox = box
+
+
     def activateBox(self, box):
         # We move the cursor to the active box, then set active box to the current one.
         pos = self.Boxes[box.level-1][box.name]
         msg = Msg('move cursor', mtype='MOVE_CURSOR', code=(pos.pos[0]+1, pos.pos[1]+1))
         self.SendMessage(msg)
         self.ActiveBox = box
+
     def registerNewBox(self, box):
         # Here, we create a new box to draw.  It has a level and a certain position.
         # If we don't have that many levels, we'll enlarge our list of dictionaries until we do.
@@ -160,7 +213,8 @@ class AppState(Systems):
         self.Boxes[box.level-1][box.name] = box
     def getActiveBox(self):
         return self.ActiveBox
-
+    def getState(self):
+        return self.State
 
 class TerminalPrinter(Systems):
     def __init__(self, MsgBusInstance, terminal, AppStateInstance):
@@ -172,6 +226,7 @@ class TerminalPrinter(Systems):
         #self.csr = self.AppState.csr
         self.Boxes = self.AppState.Boxes
         self.ActiveBox = self.AppState.getActiveBox
+        self.State = self.AppState.getState
 
     def HandleMessage(self, msg):
         if msg.mtype == 'INPUT':
@@ -179,20 +234,25 @@ class TerminalPrinter(Systems):
             if msg.code.code != None:
                 # We don't want to move out of the box...
                 # ... so this global input keeps us moving around the current, active box.
-                if msg.code.code == self.terminal.KEY_LEFT:
-                    if self.csr[1] - 1 > self.ActiveBox().pos[1]:
-                        self.csr = (self.csr[0], self.csr[1] - 1)
-                elif msg.code.code == self.terminal.KEY_RIGHT:
-                    if self.csr[1] + 1 < self.ActiveBox().pos[1] + self.ActiveBox().size[1] - 1:
-                        self.csr = (self.csr[0], self.csr[1] + 1)
-                elif msg.code.code == self.terminal.KEY_DOWN:
-                    if self.csr[0] + 1 < self.ActiveBox().pos[0] + self.ActiveBox().size[0] - 1:
-                        self.csr = (self.csr[0] + 1, self.csr[1])
-                elif msg.code.code == self.terminal.KEY_UP:
-                    if self.csr[0] - 1 > self.ActiveBox().pos[0]:
-                        self.csr = (self.csr[0] - 1, self.csr[1])
+                if self.State() == 'insert':
+                    if msg.code.code == self.terminal.KEY_LEFT:
+                        if self.csr[1] - 1 > self.ActiveBox().pos[1]:
+                            self.csr = (self.csr[0], self.csr[1] - 1)
+                    elif msg.code.code == self.terminal.KEY_RIGHT:
+                        if self.csr[1] + 1 < self.ActiveBox().pos[1] + self.ActiveBox().size[1] - 1:
+                            self.csr = (self.csr[0], self.csr[1] + 1)
+                    elif msg.code.code == self.terminal.KEY_DOWN:
+                        if self.csr[0] + 1 < self.ActiveBox().pos[0] + self.ActiveBox().size[0] - 1:
+                            self.csr = (self.csr[0] + 1, self.csr[1])
+                    elif msg.code.code == self.terminal.KEY_UP:
+                        if self.csr[0] - 1 > self.ActiveBox().pos[0]:
+                            self.csr = (self.csr[0] - 1, self.csr[1])
         elif msg.mtype == 'MOVE_CURSOR':
             self.csr = msg.code
+        elif msg.mtype == 'PRINT_DATA':
+            self.printToBox(msg.code['box'], msg.code['data'])
+        elif msg.mtype == 'PRINT_CHAR':
+            self.printAtChar(msg.code['data'])
 
     def loopBoxes(self):
         for level in range(0,len(self.Boxes)):
@@ -204,17 +264,31 @@ class TerminalPrinter(Systems):
                     box.drawn = True
 
     def drawBox(self, box):
-        for y in range(0, box.size[1]):
-            if y == 0 or y == box.size[1] - 1:
-                for x in range(0, box.size[0]):
-                    # Top or bottom of the box!
-                    print(self.terminal.move(x+box.pos[0],y+box.pos[1]) + '-')
+        for y in range(0, box.size[0]):
+            if y == 0 or y == box.size[0] - 1:
+                for x in range(0, box.size[1]):
+                    print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '-')
             else:
-                if y == 0 or y == box.size[1] - 1:
-                    for x in [0, box.size[0]]:
-                        print(self.terminal.move(x+box.pos[0],y+box.pos[1]) + '|')
+                for x in [0, box.size[1]]:
+                    print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '|')
+
+    def printAtChar(self, data):
+        #print((self.terminal.move(self.csr[0], self.csr[1]) + data))
+        print(data)
+        self.csr = (self.csr[0], self.csr[1] + 1)
+
+    def printToBox(self, box, data):
+        i = 0
+        # We just sort through and print.  Probably not that fast, but it'll work for the moment.
+        for y in range(1, box.size[0]-1):
+            for x in range(1, box.size[1]-1):
+                # Top or bottom of the box!
+                if i < len(data) - 1:
+                    print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + data[i])
+                    i += 1
                 else:
-                        print(self.terminal.move(x+box.pos[0],y+box.pos[1]) + '|')
+                    self.csr = (y+box.pos[0],x+box.pos[1]+1)
+                    break
 
     def MainLoop(self):
         # Let's set up the terminal!
