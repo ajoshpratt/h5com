@@ -401,16 +401,20 @@ class TerminalPrinter(Systems):
                 print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '.')
 
     def drawBox(self, box):
+        x_offset = 0
         for y in range(0, box.size[0]+1):
             if y == 0:
-                for x in range(0, box.size[1]+1):
+                for x in range(0, box.size[1]+1-len(box.name)-3):
                     # This is the top!
                     if x == 0:
                         print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u250c')
-                    elif x == box.size[1]:
-                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u2510')
+                    elif x == box.size[1]-len(box.name)-3:
+                        print(self.terminal.move(y+box.pos[0],x+x_offset+box.pos[1]) + '\u2510')
+                    elif x == int(box.size[1]/2):
+                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u2524 ' + box.name + ' ' + '\u251c')
+                        x_offset = len(box.name)+3
                     else:
-                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u2500')
+                        print(self.terminal.move(y+box.pos[0],x+x_offset+box.pos[1]) + '\u2500')
             elif y == box.size[0]:
                 for x in range(0, box.size[1]+1):
                     # This is the top!
@@ -450,14 +454,31 @@ class TerminalPrinter(Systems):
         x = 1
         # Data is a numpy array.  We can't sort through it the normal way; instead, we want to print it item by item.
         stringToPrint = ''
-        for line in data:
-            for item in line:
+        for iline, line in enumerate(data):
+            if iline == 0:
+                padding = int(np.floor(np.log10(data.shape[0]))) + 1
+                stringToPrint += ' '*padding + '   '
+                for iitem in range(box.x_coord[0], box.x_coord[1]):
+                    padding = 8
+                    item = str(iitem).zfill(padding)
+                    stringToPrint += ' ' + item + ' '
+                    x += 1
+                    if x == box.cells - 1:
+                        x = 1
+                        break
+                print(self.terminal.move(y+box.pos[0]+1,box.pos[1]+1) + str(stringToPrint))
+                y += 1
+                stringToPrint = ''
+            for iitem, item in enumerate(line):
                 # Our box should ultimately have a 'cell', and we just jump to cell coordinates.  Eventually.
                 #for x in range(0, box.cells):
+                if iitem == 0:
+                    padding = int(np.floor(np.log10(data.shape[0]))) + 1
+                    stringToPrint += str(iline).zfill(padding) + '   '
                 item = '%.2e' % float(item)
                 stringToPrint += ' ' + item + ' '
                 x += 1
-                if x == box.cells:
+                if x == box.cells - 1:
                     x = 1
                     break
             print(self.terminal.move(y+box.pos[0]+1,box.pos[1]+1) + str(stringToPrint))
@@ -529,7 +550,7 @@ class boxWindow():
         # Let's say we always want to show... oh, 4 digits.
         # How many cells do we have?  Well, we need space, so that's 6 for each...
         self.n_digits = 4
-        self.cells = (int(np.floor(self.size[1]/(self.n_digits+5)))) - 4
+        self.cells = min((int(np.floor(self.size[1]/(self.n_digits+5)))) - 1, 10)
         #self.cells = 2
         self.x_coord = (0, self.cells)
         self.data = data
@@ -565,9 +586,9 @@ class boxWindow():
         self.updateDrawData()
     def updateDrawData(self):
         if self.layers > 1:
-            self.draw_data = self.data[self.y_coord[0]:self.y_coord[1],self.x_coord[0]:self.y_coord[1],self.activeLayer]
+            self.draw_data = self.data[self.y_coord[0]:self.y_coord[1],self.x_coord[0]:self.x_coord[1],self.activeLayer]
         elif self.layers > 0:
-            self.draw_data = self.data[self.y_coord[0]:self.y_coord[1],self.x_coord[0]:self.y_coord[1]]
+            self.draw_data = self.data[self.y_coord[0]:self.y_coord[1],self.x_coord[0]:self.x_coord[1]]
         else:
             self.draw_data = self.data[self.y_coord[0]:self.y_coord[1]]
     def move_down(self):
@@ -581,11 +602,11 @@ class boxWindow():
             self.updateDrawData()
             self.damaged = True
     def move_left(self):
-        self.y_coord = (self.x_coord[0]-1, self.x_coord[1]-1)
+        self.x_coord = (self.x_coord[0]-1, self.x_coord[1]-1)
         self.updateDrawData()
         self.damaged = True
     def move_right(self):
-        self.y_coord = (self.x_coord[0]+1, self.x_coord[1]+1)
+        self.x_coord = (self.x_coord[0]+1, self.x_coord[1]+1)
         self.updateDrawData()
         self.damaged = True
 
