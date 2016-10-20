@@ -197,7 +197,7 @@ class AppState(Systems):
             self.State = 'command'
 
     def modeWindow(self, dataset):
-        box = boxWindow(size=(3, int(self.w/2)), pos=(int(self.h-4),int(1)), level=3, name='Mode', data=[dataset])
+        box = boxWindow(size=(3, int(self.w)), pos=(int(self.h-4),int(1)), level=3, name='Mode', data=[dataset])
         box.decorate = False
         box.damaged = True
         msg = Msg('new_box', mtype='NEW_BOX', code=box)
@@ -310,7 +310,7 @@ class H5DataLoader(Systems):
             self.statusWindow(self.currentGroup)
 
     def statusWindow(self, dataset):
-        box = boxWindow(size=(3, int(self.w/2)), pos=(int(self.h-3),int(1)), level=1, name='Status', data=[dataset])
+        box = boxWindow(size=(3, int(self.w)), pos=(int(self.h-3),int(1)), level=1, name='Status', data=[dataset])
         box.decorate = False
         msg = Msg('new_box', mtype='NEW_BOX', code=box)
         self.SendMessage(msg)
@@ -423,7 +423,7 @@ class TerminalPrinter(Systems):
                         print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u250c')
                     elif x == box.size[1]-len(box.name)-3:
                         print(self.terminal.move(y+box.pos[0],x+x_offset+box.pos[1]) + '\u2510')
-                    elif x == int(box.size[1]/2):
+                    elif x == int(box.size[1]/2)-int((len(box.name)+4)/2):
                         print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u2524 ' + box.name + ' ' + '\u251c')
                         x_offset = len(box.name)+3
                     else:
@@ -469,35 +469,79 @@ class TerminalPrinter(Systems):
         stringToPrint = ''
         for iline, line in enumerate(data):
             if iline == 0:
-                padding = int(np.floor(np.log10(data.shape[0]))) + 1
-                stringToPrint += ' '*padding + '   '
-                for iitem in range(box.x_coord[0], box.x_coord[1]):
-                    padding = 8
-                    item = str(iitem).zfill(padding)
+                if data.dtype.names == None:
+                    # We're printing headers, here!  But what if we're not a blah blah blah?
+                    #padding = int(np.ceil(np.log10(data.shape[0]))) + 1
+                    padding = int(np.ceil(np.log10(data.shape[0]))) + 1
+                    padding = int(np.ceil(np.log10(box.y_items))) + 1
+                    #padding = 8
+                    stringToPrint += ' '*padding + ' '
+                    for iitem in range(box.x_coord[0], box.x_coord[1]):
+                        padding = 8
+                        item = str(iitem).zfill(padding)
+                        stringToPrint += ' ' + item + ' '
+                        x += 1
+                        if x == box.cells - 1:
+                            x = 1
+                            break
+                else:
+                    padding = int(np.ceil(np.log10(data.shape[0]))) + 1
+                    #padding = 8
+                    padding = int(np.ceil(np.log10(box.y_items))) + 1
+                    stringToPrint += ' '*padding + ' '
+                    for item in data.dtype.names:
+                        new_padding = 8
+                        if len(str(item)) > new_padding:
+                            item = str(item)[0:new_padding]
+                        else:
+                            item = str(item) + (' '*(new_padding-len(str(item))))
+                        stringToPrint += ' ' + item + ' '
+                        x += 1
+                        if x == box.cells - 1:
+                            x = 1
+                            break
+
+                print(self.terminal.move(y+box.pos[0]+1,box.pos[1]+1) + str(stringToPrint))
+                y += 1
+                stringToPrint = ''
+            try:
+                for iitem, item in enumerate(line):
+                    # Our box should ultimately have a 'cell', and we just jump to cell coordinates.  Eventually.
+                    #for x in range(0, box.cells):
+                    new_padding = int(np.ceil(np.log10(data.shape[0]))) + 1
+                    new_padding = 8
+                    new_padding = box.n_digits + 4
+                    # Spacing, you know?
+                    if iitem == 0:
+                        #padding = int(np.ceil(np.log10(data.shape[0]))) + 1
+                        padding = int(np.ceil(np.log10(box.y_items))) + 1
+                        stringToPrint += str(iline+box.y_coord[0]).zfill(padding) + (' ')
+                    if type(item) is np.float32 or type(item) is np.double:
+                        item = '%.2e' % float(item)
+                    else:
+                        if len(str(item)) > new_padding:
+                            item = str(item)[0:new_padding]
+                        else:
+                            item = str(item) + (' '*(new_padding-len(str(item))))
                     stringToPrint += ' ' + item + ' '
                     x += 1
                     if x == box.cells - 1:
                         x = 1
                         break
-                print(self.terminal.move(y+box.pos[0]+1,box.pos[1]+1) + str(stringToPrint))
-                y += 1
-                stringToPrint = ''
-            for iitem, item in enumerate(line):
-                # Our box should ultimately have a 'cell', and we just jump to cell coordinates.  Eventually.
-                #for x in range(0, box.cells):
-                if iitem == 0:
-                    padding = int(np.floor(np.log10(data.shape[0]))) + 1
-                    stringToPrint += str(iline).zfill(padding) + '   '
-                item = '%.2e' % float(item)
-                stringToPrint += ' ' + item + ' '
-                x += 1
-                if x == box.cells - 1:
-                    x = 1
-                    break
+            except:
+                # We should really just try and sort the dataset.  But this is 'single value' sets which are sooort of escaping
+                # the logic used to sort the data shape.
+                    padding = int(np.ceil(np.log10(data.shape[0]))) + 1
+                    stringToPrint += str(iline+box.y_coord[0]).zfill(padding) + '   '
+                    if type(line) is float:
+                        item = '%.2e' % float(line)
+                    else:
+                        item = str(line)
+                    stringToPrint += ' ' + item + ' '
             print(self.terminal.move(y+box.pos[0]+1,box.pos[1]+1) + str(stringToPrint))
             stringToPrint = ''
             y += 1
-            if y == box.size[0]-1:
+            if y == box.size[0]-2:
                 break
 
     def printToBox(self, box, data):
@@ -578,19 +622,18 @@ class boxWindow():
         # Let's assume the data is brought in as a list or numpy array.  It's not hard, whatever.
         # First, figure out the number of dimensions...
         try:
-            dim = len(self.data.shape)
+            self.dim = len(self.data.shape)
         except:
             # we're a list, then!
             # We shouldn't really assume 1 dimension, but it's fine for now.
-            dim = 0
+            self.dim = 1
             self.y_items = len(self.data)
         # If it's two dimensions, our number of layers are 1.  Otherwise, we set
         # it to the third value.
-        if dim == 2:
-            self.layers = 1
+        if self.dim == 2:
             self.y_items = self.data.shape[0]
-        elif dim == 0:
-            self.layers = 0
+        elif self.dim == 1:
+            self.y_items = len(self.data)
         else:
             self.layers = self.data.shape[2]
             self.y_items = self.data.shape[0]
@@ -598,9 +641,9 @@ class boxWindow():
         self.activeLayer = 0
         self.updateDrawData()
     def updateDrawData(self):
-        if self.layers > 1:
+        if self.dim == 3:
             self.draw_data = self.data[self.y_coord[0]:self.y_coord[1],self.x_coord[0]:self.x_coord[1],self.activeLayer]
-        elif self.layers > 0:
+        elif self.dim == 2:
             self.draw_data = self.data[self.y_coord[0]:self.y_coord[1],self.x_coord[0]:self.x_coord[1]]
         else:
             self.draw_data = self.data[self.y_coord[0]:self.y_coord[1]]
