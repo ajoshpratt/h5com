@@ -277,12 +277,15 @@ class H5DataLoader(Systems):
                 self.changeGroup(self.ActiveKeys[self.csr(self.ActiveBox())[0]])
             except:
                 pass
-            self.returnGroupKeys(self.currentGroup)
-            box = boxWindow(size=(int(self.h/2), int(self.w/2)), pos=(int(self.h/4),int(self.w/4)), level=1, name='Main', data=self.ActiveKeys)
-            #box = boxWindow(size=(int(self.h/4), int(self.w/4)), pos=(0,0), level=1, name='New', data=self.ActiveKeys)
+            # We'll just check to see if it's a group.  Otherwise, it's a dataset.
+            try:
+                self.returnGroupKeys(self.currentGroup)
+                box = boxWindow(size=(int(self.h/2), int(self.w/4)), pos=(int(self.h/4),int(self.w/4)), level=1, name='Main', data=self.ActiveKeys)
+            except:
+                self.returnDataset(self.currentGroup)
+                box = boxWindow(size=(int(self.h/2), int(self.w/4)), pos=(int(self.h/4),int(self.w/4*3)), level=2, name='Data', data=self.data)
             msg = Msg('new_box', mtype='NEW_BOX', code=box)
             self.SendMessage(msg)
-            # This usually has to wait, I'm afraid, so we can't pull from the Boxes list yet.  We just send in something with the proper name and level, though.
             msg = Msg('new_box', mtype='ACTIVATE_BOX', code=box)
             self.SendMessage(msg)
 
@@ -299,12 +302,15 @@ class H5DataLoader(Systems):
         msg = Msg('new_box', mtype='NEW_BOX', code=box)
         self.SendMessage(msg)
     def returnGroupKeys(self, group):
-        returnString = ''
         self.ActiveKeys = []
         for key, value in self.h5[group].items():
             # Should we do it here, or have the other sort it out?
-            returnString += str(key) + '\n'
             self.ActiveKeys.append(key)
+    def returnDataset(self, group):
+        self.data = []
+        for item in range(0, self.h5[group].shape[0]):
+            # Should we do it here, or have the other sort it out?
+            self.data.append(self.h5[group][item,:])
     def MainLoop(self):
             while self.Run:
                 self.start_clock()
@@ -393,9 +399,9 @@ class TerminalPrinter(Systems):
         # Here, we assume the data is a list.
         for item in data:
             if len(item) < box.size[1]:
-                print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + item)
+                print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + str(item))
             else:
-                print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + item[0:box.size[1]])
+                print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + str(item[0:box.size[1]]))
             y += 1
             if y == box.size[0]-1:
                 break
