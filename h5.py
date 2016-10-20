@@ -262,7 +262,7 @@ class H5DataLoader(Systems):
         if msg.mtype == 'H5_PREV_GROUP':
             self.prevGroup()
             self.returnGroupKeys(self.currentGroup)
-            box = boxWindow(size=(int(self.h/2), int(self.w/2)), pos=(int(self.h/4),int(self.w/4)), level=1, name='Main', data=self.ActiveKeys)
+            box = boxWindow(size=(int(self.h-5), int(self.w/2)), pos=(int(1),int(self.w/4)), level=1, name='Main', data=self.ActiveKeys)
             #box = boxWindow(size=(int(self.h/4), int(self.w/4)), pos=(0,0), level=1, name='New', data=self.ActiveKeys)
             msg = Msg('new_box', mtype='NEW_BOX', code=box)
             self.SendMessage(msg)
@@ -274,43 +274,52 @@ class H5DataLoader(Systems):
             self.SendMessage(msg)
         if msg.mtype == 'H5_LOAD':
             try:
-                self.changeGroup(self.ActiveKeys[self.csr(self.ActiveBox())[0]])
+                self.changeGroup(self.ActiveKeys[self.csr(self.ActiveBox())[0] + self.ActiveBox().y_coord[0]])
             except:
+                # This happens when we load up the dataset for the first time.
                 pass
             # We'll just check to see if it's a group.  Otherwise, it's a dataset.
             try:
                 self.returnGroupKeys(self.currentGroup)
-                box = boxWindow(size=(int(self.h/2), int(self.w/4)), pos=(int(self.h/4),int(self.w/4)), level=1, name='Main', data=self.ActiveKeys)
+                box = boxWindow(size=(int(self.h-5), int(self.w/4)), pos=(int(1),int(1)), level=1, name='Main', data=self.ActiveKeys)
             except:
                 self.returnDataset(self.currentGroup)
-                box = boxWindow(size=(int(self.h/2), int(self.w/4)), pos=(int(self.h/4),int(self.w/4*3)), level=2, name='Data', data=self.data)
+                box = boxWindow(size=(int(self.h-5), int(self.w/4*3)-5), pos=(int(1),int(self.w/4)+5), level=2, name='Data', data=self.data)
+                box.isGrid = True
             msg = Msg('new_box', mtype='NEW_BOX', code=box)
             self.SendMessage(msg)
             msg = Msg('new_box', mtype='ACTIVATE_BOX', code=box)
             self.SendMessage(msg)
+            self.statusWindow(self.currentGroup)
+
+    def statusWindow(self, dataset):
+        box = boxWindow(size=(3, int(self.w/2)), pos=(int(self.h-3),int(1)), level=1, name='Status', data=[dataset])
+        box.decorate = False
+        msg = Msg('new_box', mtype='NEW_BOX', code=box)
+        self.SendMessage(msg)
 
     def changeGroup(self, newGroup):
         self.currentGroup += newGroup + '/'
-        box = boxWindow(size=(3, int(self.w/2)), pos=(int(self.h/12),int(self.w/4)), level=1, name='Status', data=[self.currentGroup])
-        msg = Msg('new_box', mtype='NEW_BOX', code=box)
-        self.SendMessage(msg)
+        self.statusWindow(self.currentGroup)
+
     def prevGroup(self):
         currentGroup = '/' + str.join('/', list(filter(None, self.currentGroup.split('/')))[0:-1]) + '/'
-        print(currentGroup)
         self.currentGroup = currentGroup
-        box = boxWindow(size=(3, int(self.w/2)), pos=(int(self.h/12),int(self.w/4)), level=1, name='Status', data=[self.currentGroup])
-        msg = Msg('new_box', mtype='NEW_BOX', code=box)
-        self.SendMessage(msg)
+        self.statusWindow(self.currentGroup)
+
     def returnGroupKeys(self, group):
         self.ActiveKeys = []
         for key, value in self.h5[group].items():
             # Should we do it here, or have the other sort it out?
             self.ActiveKeys.append(key)
+
     def returnDataset(self, group):
-        self.data = []
-        for item in range(0, self.h5[group].shape[0]):
+        #self.data = []
+        #for item in range(0, self.h5[group].shape[0]):
             # Should we do it here, or have the other sort it out?
-            self.data.append(self.h5[group][item,:])
+        #    self.data.append(self.h5[group][item,:])
+        self.data = self.h5[group][:]
+
     def MainLoop(self):
             while self.Run:
                 self.start_clock()
@@ -340,9 +349,13 @@ class TerminalPrinter(Systems):
                     if msg.code.code == self.terminal.KEY_LEFT:
                         if self.csr[1] - 1 > self.ActiveBox().pos[1]:
                             self.csr = (self.csr[0], self.csr[1] - 1)
+                        else:
+                            self.ActiveBox().move_left()
                     elif msg.code.code == self.terminal.KEY_RIGHT:
                         if self.csr[1] + 1 < self.ActiveBox().pos[1] + self.ActiveBox().size[1] - 1:
                             self.csr = (self.csr[0], self.csr[1] + 1)
+                        else:
+                            self.ActiveBox().move_right()
                     elif msg.code.code == self.terminal.KEY_DOWN:
                         if self.csr[0] + 1 < self.ActiveBox().pos[0] + self.ActiveBox().size[0] - 1:
                             self.csr = (self.csr[0] + 1, self.csr[1])
@@ -365,13 +378,15 @@ class TerminalPrinter(Systems):
             # First, get the box object, and the position...
             for box in self.Boxes[level].values():
                 # ... now draw it.
-                if box.drawn == False:
-                    if box.new == True:
-                        self.clearBox(box)
+                if box.damaged == True:
+                    self.clearBox(box)
+                    if box.decorate == True:
                         self.drawBox(box)
-                        box.new == False
-                    self.printListBox(box, box.draw_data)
-                    box.drawn = True
+                    if box.isGrid == False:
+                        self.printListBox(box, box.draw_data)
+                    else:
+                        self.printGridBox(box, box.draw_data)
+                    box.damaged = False
 
     def clearBox(self, box):
         for y in range(0, box.size[0]):
@@ -379,13 +394,29 @@ class TerminalPrinter(Systems):
                 print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + ' ')
 
     def drawBox(self, box):
-        for y in range(0, box.size[0]):
-            if y == 0 or y == box.size[0] - 1:
-                for x in range(0, box.size[1]):
-                    print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '-')
+        for y in range(0, box.size[0]+1):
+            if y == 0:
+                for x in range(0, box.size[1]+1):
+                    # This is the top!
+                    if x == 0:
+                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u250c')
+                    elif x == box.size[1]:
+                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u2510')
+                    else:
+                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u2500')
+            elif y == box.size[0]:
+                for x in range(0, box.size[1]+1):
+                    # This is the top!
+                    if x == 0:
+                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u2514')
+                    elif x == box.size[1]:
+                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u2518')
+                    else:
+                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u2500')
+
             else:
                 for x in [0, box.size[1]]:
-                    print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '|')
+                    print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u2502')
 
     def printAtChar(self, data):
         #print((self.terminal.move(self.csr[0], self.csr[1]) + data))
@@ -402,6 +433,24 @@ class TerminalPrinter(Systems):
                 print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + str(item))
             else:
                 print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + str(item[0:box.size[1]]))
+            y += 1
+            if y == box.size[0]-1:
+                break
+
+    def printGridBox(self, box, data):
+        i = 0
+        y = 1
+        x = 1
+        # Data is a numpy array.  We can't sort through it the normal way; instead, we want to print it item by item.
+        for line in data:
+            for item in line:
+                # Our box should ultimately have a 'cell', and we just jump to cell coordinates.  Eventually.
+                # That is, we don't hold more than we can show in the box at any given time.
+                for x in range(0, 2):
+                    if len(item) < box.size[1]:
+                        print(self.terminal.move(y+box.pos[0],int(x*box.size[1]/2)+box.pos[1]) + str(item))
+                    else:
+                        print(self.terminal.move(y+box.pos[0],int(x*box.size[1]/2)+box.pos[1]) + str(item[0:box.size[1]]))
             y += 1
             if y == box.size[0]-1:
                 break
@@ -460,24 +509,64 @@ class boxWindow():
         self.level = level
         self.drawn = False
         self.new = True
-        self.internal_coord = (0, self.size[0] - 1)
+        # These are values about the window on the dataset, here...
+        self.y_coord = (0, self.size[0] - 1)
+        # This coord is a little more difficult.  Just using the box size isn't good enough,
+        # as we need to also limit the number of elements we show.  Ergo, let's start with... 3
+        #self.x_coord = (0, self.size[1] - 1)
+        self.x_coord = (0, 3)
         self.data = data
-        self.draw_data = None
+        self.damaged = True
+        self.decorate = True
+        self.isGrid = False
         if self.data != None:
             self.sort_data()
     def sort_data(self):
         # It works by drawing lines.
-        #internal_lines = len(self.data.split('\n'))
-        #self.data = self.data.split('\n')
-        self.draw_data = self.data[self.internal_coord[0]:self.internal_coord[1]]
+        # Let's assume the data is brought in as a list or numpy array.  It's not hard, whatever.
+        # First, figure out the number of dimensions...
+        try:
+            dim = len(self.data.shape)
+        except:
+            # we're a list, then!
+            # We shouldn't really assume 1 dimension, but it's fine for now.
+            dim = 0
+        # If it's two dimensions, our number of layers are 1.  Otherwise, we set
+        # it to the third value.
+        if dim == 2:
+            self.layers = 1
+        elif dim == 0:
+            self.layers = 0
+        else:
+            self.layers = self.data.shape[2]
+        # Let's set it to layer 0, here...
+        self.activeLayer = 0
+        self.updateDrawData()
+    def updateDrawData(self):
+        if self.layers > 1:
+            self.draw_data = self.data[self.y_coord[0]:self.y_coord[1],self.x_coord[0]:self.y_coord[1],self.activeLayer]
+        elif self.layers > 0:
+            self.draw_data = self.data[self.y_coord[0]:self.y_coord[1],self.x_coord[0]:self.y_coord[1]]
+        else:
+            self.draw_data = self.data[self.y_coord[0]:self.y_coord[1]]
     def move_down(self):
-        self.internal_coord = (self.internal_coord[0]+1, self.internal_coord[1]+1)
-        self.draw_data = self.data[self.internal_coord[0]:self.internal_coord[1]]
-        self.drawn = False
+        if self.y_coord[0] < 1000:
+            self.y_coord = (self.y_coord[0]+1, self.y_coord[1]+1)
+            self.updateDrawData()
+            self.damaged = True
     def move_up(self):
-        self.internal_coord = (self.internal_coord[0]-1, self.internal_coord[1]-1)
-        self.draw_data = self.data[self.internal_coord[0]:self.internal_coord[1]]
-        self.drawn = False
+        if self.y_coord[0] > 0:
+            self.y_coord = (self.y_coord[0]-1, self.y_coord[1]-1)
+            self.updateDrawData()
+            self.damaged = True
+    def move_left(self):
+        self.y_coord = (self.x_coord[0]-1, self.x_coord[1]-1)
+        self.updateDrawData()
+        self.damaged = True
+    def move_right(self):
+        self.y_coord = (self.x_coord[0]+1, self.x_coord[1]+1)
+        self.updateDrawData()
+        self.damaged = True
 
     # There's no real limit on how big a box can be, internally.
     # We just have a window into it, and that's the 'size'.
