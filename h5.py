@@ -122,6 +122,8 @@ class AppState(Systems):
         self.h5file = 'west.h5'
         # Possible states: insert, command
         self.State = 'command'
+        self.h = self.terminal.height
+        self.w = self.terminal.width
     def MainLoop(self):
         # We're setting up the first box, as we start the program...
         #self.h = self.terminal.height
@@ -130,6 +132,7 @@ class AppState(Systems):
         #self.registerNewBox(boxWindow(size=(int(self.h/2), int(self.w/2)), pos=(int(self.h/4),int(self.w/4)), level=1, name='Main'))
         #msg = Msg('active_box', mtype='ACTIVATE_BOX', code=boxWindow(size=(int(self.h/2), int(self.w/2)), pos=(int(self.h/4),int(self.w/4)), level=1, name='Main'))
         #self.SendMessage(msg)
+        self.modeWindow(self.State)
         while self.Run:
             self.start_clock()
             self.SortMessages()
@@ -138,6 +141,7 @@ class AppState(Systems):
         if msg.mtype == 'INPUT':
             if msg.code.code == self.terminal.KEY_ESCAPE:
                 self.State = 'command'
+                self.modeWindow(self.State)
             elif self.State == 'move':
                 if msg.code.code == self.terminal.KEY_LEFT:
                     self.nextBox()
@@ -151,8 +155,10 @@ class AppState(Systems):
                     self.SendMessage(msg)
                 if msg.code == 'i':
                     self.State = 'insert'
+                    self.modeWindow(self.State)
                 if msg.code == 'm':
                     self.State = 'move'
+                    self.modeWindow(self.State)
                 #if msg.code == 'A':
                 #    msg = Msg('new_box', mtype='NEW_BOX', code=boxWindow(size=(int(self.h/4), int(self.w/4)), pos=(0,0), level=1, name='New'))
                 #    self.SendMessage(msg)
@@ -189,6 +195,13 @@ class AppState(Systems):
             # Stored in the code is the box object information
             self.registerNewBox(msg.code)
             self.State = 'command'
+
+    def modeWindow(self, dataset):
+        box = boxWindow(size=(3, int(self.w/2)), pos=(int(self.h-4),int(1)), level=3, name='Mode', data=[dataset])
+        box.decorate = False
+        box.damaged = True
+        msg = Msg('new_box', mtype='NEW_BOX', code=box)
+        self.SendMessage(msg)
 
     def nextBox(self):
         stop_next = False
