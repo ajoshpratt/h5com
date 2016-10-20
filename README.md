@@ -5,7 +5,7 @@ Massive work in progress.
 
 Requires numpy, h5py, and blessed.
 
-This is less of a program to fulfill a need (although I suppose it does that), and more of a way to play around with message passing interfaces in the context of an end-user program in Python.  In addition, it's multithreaded (not that it needs to be).  Uses a modal motif, ala vim.
+This is less of a program to fulfill a need (although I suppose it does that), and more of a way to play around with a message bus in the context of an end-user program in Python.  In addition, it's multithreaded (not that it needs to be).  Uses a modal motif, ala vim.
 
 Can still crash if you hit the wrong key.
 
