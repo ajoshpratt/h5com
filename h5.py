@@ -402,29 +402,38 @@ class TerminalPrinter(Systems):
                         if self.csr[0] + 1 < self.ActiveBox().pos[0] + self.ActiveBox().size[0] - 1:
                             if self.csr[0] + 1 - self.ActiveBox().pos[0] <= self.ActiveBox().y_items:
                                 self.csr = (self.csr[0] + 1, self.csr[1])
+                                self.ActiveBox().damaged = True
                         else:
                             self.ActiveBox().move_down()
+                            self.ActiveBox().damaged = True
                     elif msg.code.code == self.terminal.KEY_UP:
                         if self.csr[0] - 1 > self.ActiveBox().pos[0]:
                             if self.csr[0] - 1 - self.ActiveBox().pos[0] >= 0:
                                 self.csr = (self.csr[0] - 1, self.csr[1])
+                                self.ActiveBox().damaged = True
+
                         else:
                             self.ActiveBox().move_up()
+                            self.ActiveBox().damaged = True
                     # Temp standin for page down
                     elif msg.code.code == 338:
                         # What is the height?
                         if self.csr[0] + 10 < self.ActiveBox().pos[0] + self.ActiveBox().size[0] - 10:
                             if self.csr[0] + 10 - self.ActiveBox().pos[0] <= self.ActiveBox().y_items:
                                 self.csr = (self.csr[0] + 10, self.csr[1])
+                                self.ActiveBox().damaged = True
                         else:
                             self.ActiveBox().move_down(10)
+                            self.ActiveBox().damaged = True
                     if msg.code.code == 339:
                         # What is the height?
                         if self.csr[0] - 10 > self.ActiveBox().pos[0]:
                             if self.csr[0] - 10 - self.ActiveBox().pos[0] >= 0:
                                 self.csr = (self.csr[0] - 10, self.csr[1])
+                                self.ActiveBox().damaged = True
                         else:
                             self.ActiveBox().move_up(10)
+                            self.ActiveBox().damaged = True
             if self.State() == 'command':
                 if msg.code == '+':
                     # What is the height?
@@ -435,6 +444,7 @@ class TerminalPrinter(Systems):
                     self.ActiveBox().move_layer_down()
         elif msg.mtype == 'MOVE_CURSOR':
             self.csr = msg.code
+            self.ActiveBox().damaged = True
         elif msg.mtype == 'PRINT_DATA':
             self.printToBox(msg.code['box'], msg.code['data'])
         elif msg.mtype == 'PRINT_CHAR':
@@ -500,12 +510,23 @@ class TerminalPrinter(Systems):
         i = 0
         y = 1
         x = 1
+        underline = False
         # Here, we assume the data is a list.
         for item in data:
+            # We want to know if the current item is highlighted...
+            if self.csr[0] == y + 1:
+                underline = True
             if len(item) < box.size[1]:
-                print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + str(item))
+                if underline == True:
+                    print(self.terminal.underline + self.terminal.move(y+box.pos[0],x+box.pos[1]) + str(item) + self.terminal.normal)
+                else:
+                    print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + str(item))
             else:
-                print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + str(item[0:box.size[1]]))
+                if underline == True:
+                    print(self.terminal.underline + self.terminal.move(y+box.pos[0],x+box.pos[1]) + str(item[0:box.size[1]]) + self.terminal.normal)
+                else:
+                    print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + str(item[0:box.size[1]]))
+            underline = False
             y += 1
             if y == box.size[0]-1:
                 break
@@ -628,17 +649,27 @@ class TerminalPrinter(Systems):
 
     def MainLoop(self):
         # Let's set up the terminal!
-        with self.terminal.fullscreen():
-            while self.Run:
-                self.start_clock()
-                # Move the cursor to the current position.
-                # Draw all the boxes we want to draw!
-                with self.terminal.hidden_cursor():
+        with self.terminal.hidden_cursor():
+            with self.terminal.fullscreen():
+                while self.Run:
+                    self.start_clock()
+                    # Move the cursor to the current position.
+                    # Draw all the boxes we want to draw!
+                    #with self.terminal.hidden_cursor():
                     self.loopBoxes()
-                print((self.terminal.move(self.csr[0], self.csr[1])), end='')
-                self.SortMessages()
-                self.end_clock()
-                sys.stdout.flush()
+                    # Can we highlight the entire box line?
+                    #with self.terminal.hidden_cursor():
+                    #print(self.terminal.move(self.csr[0], self.csr[1]), end='')
+
+                    #print(self.terminal.normal)
+                    #print(self.terminal.color(5))
+                    #try:
+                    #    with self.terminal.location(self.ActiveBox().pos[0], self.csr[1]):
+                    #except:
+                    #    pass
+                    self.SortMessages()
+                    self.end_clock()
+                    sys.stdout.flush()
 
 class boxWindow():
     def __init__(self, size, pos, level, name, data=None):
