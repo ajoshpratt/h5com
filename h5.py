@@ -683,7 +683,7 @@ class boxWindow():
         else:
             self.draw_data = self.data[self.y_coord[0]:self.y_coord[1]]
     def move_down(self, items=1):
-        if self.y_coord[0] < 1000:
+        if self.y_coord[1] < self.data.shape[0]:
             self.y_coord = (self.y_coord[0]+items, self.y_coord[1]+items)
             self.updateDrawData()
             self.damaged = True
