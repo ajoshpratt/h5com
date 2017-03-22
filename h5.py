@@ -1,4 +1,4 @@
-from __future__ import print_function, unicode_literals, division; __metaclass__ = type
+from __future__ import print_function, division; __metaclass__ = type
 
 import numpy as np
 import h5py
@@ -37,11 +37,11 @@ class MsgBus():
         # This doesn't work, but whatever.
         # We'll have to poll for a signal command.
         # works well enough, at least.
+        self.Run = False
         for i in range(0, len(self.Systems)):
             self.Systems[i].Run = False
         #    self.SystemThreads[i].join()
-        self.Run = False
-        sys.exit(0)
+        #sys.exit(0)
     def ReceiveMessage(self, msg):
         self.MsgQueue.put(msg)
     def SendMessages(self, msg):
@@ -112,17 +112,17 @@ class Input(Systems):
                 msg = Msg('input!', mtype='INPUT', code=keypress)
                 self.SendMessage(msg)
                 self.SortMessages()
-                if keypress.code == 'q':
-                    # shut it down.
-                    self.Run = False
+                #if keypress.code == 'q':
+                #    # shut it down.
+                #    self.Run = False
 
 class AppState(Systems):
-    def __init__(self, MsgBusInstance, terminal):
+    def __init__(self, MsgBusInstance, terminal, h5file):
         Systems.__init__(self, MsgBusInstance)
         self.terminal = terminal
         self.ActiveBox = None
         self.Boxes = [{}]
-        self.h5file = 'west.h5'
+        self.h5file = h5file
         # Possible states: insert, command
         self.State = 'command'
         self.h = self.terminal.height
@@ -388,6 +388,14 @@ class TerminalPrinter(Systems):
                                 self.csr = (self.csr[0] - 1, self.csr[1])
                         else:
                             self.ActiveBox().move_up()
+                    # Temp standin for page down
+                    if msg.code.code == 338:
+                        # What is the height?
+                        if self.csr[0] + 1 < self.ActiveBox().pos[0] + self.ActiveBox().size[0] - 1:
+                            if self.csr[0] + 1 - self.ActiveBox().pos[0] <= self.ActiveBox().y_items:
+                                self.csr = (self.csr[0] + 10, self.csr[1])
+                        else:
+                            self.ActiveBox().move_down()
         elif msg.mtype == 'MOVE_CURSOR':
             self.csr = msg.code
         elif msg.mtype == 'PRINT_DATA':
@@ -423,27 +431,27 @@ class TerminalPrinter(Systems):
                 for x in range(0, box.size[1]+1-len(box.name)-3):
                     # This is the top!
                     if x == 0:
-                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u250c')
+                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + u'\u250c')
                     elif x == box.size[1]-len(box.name)-3:
-                        print(self.terminal.move(y+box.pos[0],x+x_offset+box.pos[1]) + '\u2510')
+                        print(self.terminal.move(y+box.pos[0],x+x_offset+box.pos[1]) + u'\u2510')
                     elif x == int(box.size[1]/2)-int((len(box.name)+4)/2):
-                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u2524 ' + box.name + ' ' + '\u251c')
+                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + u'\u2524 ' + box.name + ' ' + u'\u251c')
                         x_offset = len(box.name)+3
                     else:
-                        print(self.terminal.move(y+box.pos[0],x+x_offset+box.pos[1]) + '\u2500')
+                        print(self.terminal.move(y+box.pos[0],x+x_offset+box.pos[1]) + u'\u2500')
             elif y == box.size[0]:
                 for x in range(0, box.size[1]+1):
                     # This is the top!
                     if x == 0:
-                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u2514')
+                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + u'\u2514')
                     elif x == box.size[1]:
-                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u2518')
+                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + u'\u2518')
                     else:
-                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u2500')
+                        print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + u'\u2500')
 
             else:
                 for x in [0, box.size[1]]:
-                    print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '\u2502')
+                    print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + u'\u2502')
 
     def printAtChar(self, data):
         #print((self.terminal.move(self.csr[0], self.csr[1]) + data))
@@ -677,7 +685,8 @@ class boxWindow():
 msgbus = MsgBus()
 terminal = Terminal()
 inputsys = Input(msgbus, terminal)
-appstate = AppState(msgbus, terminal)
+import sys
+appstate = AppState(msgbus, terminal, sys.argv[1])
 termprint = TerminalPrinter(msgbus, terminal, appstate)
 dataloader = H5DataLoader(msgbus, appstate, termprint, terminal)
 msgbus.RegisterSystem(appstate)
@@ -685,4 +694,7 @@ msgbus.RegisterSystem(termprint)
 msgbus.RegisterSystem(inputsys)
 msgbus.RegisterSystem(dataloader)
 msgbus.LaunchSystems()
+# Let's create a message and load up the file!
+msg = Msg('new_box', mtype='H5_LOAD', code=None)
+appstate.SendMessage(msg)
 msgbus.MainLoop()
