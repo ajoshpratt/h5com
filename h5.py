@@ -1,3 +1,5 @@
+from __future__ import print_function, unicode_literals, division; __metaclass__ = type
+
 import numpy as np
 import h5py
 import warnings
@@ -11,7 +13,8 @@ from threading import Thread
 import blessed
 from blessed import Terminal
 # This is Python3.  Python2 has Queue.
-from queue import Queue
+#from queue import Queue
+from Queue import Queue
 #import curses
 #stdscr = curses.initscr()
 
