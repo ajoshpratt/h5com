@@ -204,6 +204,8 @@ class AppState(Systems):
             # Stored in the code is the box object information
             self.registerNewBox(msg.code)
             self.State = 'command'
+        elif msg.mtype == 'PRINT_COMMAND':
+            self.modeWindow(msg.code)
 
     def modeWindow(self, dataset):
         box = boxWindow(size=(3, int(self.w)), pos=(int(self.h-4),int(1)), level=3, name='Mode', data=[dataset])
@@ -383,6 +385,10 @@ class TerminalPrinter(Systems):
                         if self.csr[1] + 1 < self.ActiveBox().pos[1] + self.ActiveBox().size[1] - 1:
                             self.csr = (self.csr[0], self.csr[1] + 1)
                         else:
+                            newmsg = Msg('print_data', mtype='PRINT_COMMAND', code=(self.ActiveBox().x_coord, self.ActiveBox().data.shape[1]))
+                            #msg.mtype = mtype='PRINT_COMMAND'
+                            #msg.code.code = (self.ActiveBox().x_coord, self.ActiveBox().data.shape[0])
+                            self.SendMessage(newmsg)
                             self.ActiveBox().move_right()
                     elif msg.code.code == self.terminal.KEY_DOWN:
                         if self.csr[0] + 1 < self.ActiveBox().pos[0] + self.ActiveBox().size[0] - 1:
@@ -642,8 +648,8 @@ class boxWindow():
         # Let's say we always want to show... oh, 4 digits.
         # How many cells do we have?  Well, we need space, so that's 6 for each...
         self.n_digits = 4
-        self.cells = min((int(np.floor(self.size[1]/(self.n_digits+5)))) - 1, 10)
-        #self.cells = 2
+        #self.cells = 10
+        self.cells = 20
         self.x_coord = (0, self.cells)
         self.data = data
         self.damaged = True
@@ -652,6 +658,10 @@ class boxWindow():
         self.y_items = 0
         if self.data != None:
             self.sort_data()
+        try:
+            self.cells = min((int(np.floor(self.size[1]/(self.n_digits+5)))) - 1, data.shape[1])
+        except:
+            self.cells = 1
     def sort_data(self):
         # It works by drawing lines.
         # Let's assume the data is brought in as a list or numpy array.  It's not hard, whatever.
@@ -693,13 +703,15 @@ class boxWindow():
             self.updateDrawData()
             self.damaged = True
     def move_left(self):
-        self.x_coord = (self.x_coord[0]-1, self.x_coord[1]-1)
-        self.updateDrawData()
-        self.damaged = True
+        if self.x_coord[0] > 0:
+            self.x_coord = (self.x_coord[0]-1, self.x_coord[1]-1)
+            self.updateDrawData()
+            self.damaged = True
     def move_right(self):
-        self.x_coord = (self.x_coord[0]+1, self.x_coord[1]+1)
-        self.updateDrawData()
-        self.damaged = True
+        if self.x_coord[1] <= self.data.shape[1]:
+            self.x_coord = (self.x_coord[0]+1, self.x_coord[1]+1)
+            self.updateDrawData()
+            self.damaged = True
     def move_layer_up(self):
         if self.dim == 3:
             if self.activeLayer < self.data.shape[2]-1:
