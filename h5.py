@@ -162,6 +162,10 @@ class AppState(Systems):
                 if msg.code == 'm':
                     self.State = 'move'
                     self.modeWindow(self.State)
+                if msg.code == 'e':
+                    for i in range(0, 8):
+                        msg = Msg('input!', mtype='INPUT', code=Msg('', mtype='', code=self.terminal.KEY_RIGHT))
+                        self.SendMessage(msg)
                 #if msg.code == 'A':
                 #    msg = Msg('new_box', mtype='NEW_BOX', code=boxWindow(size=(int(self.h/4), int(self.w/4)), pos=(0,0), level=1, name='New'))
                 #    self.SendMessage(msg)
@@ -389,13 +393,20 @@ class TerminalPrinter(Systems):
                         else:
                             self.ActiveBox().move_up()
                     # Temp standin for page down
-                    if msg.code.code == 338:
+                    elif msg.code.code == 338:
                         # What is the height?
-                        if self.csr[0] + 1 < self.ActiveBox().pos[0] + self.ActiveBox().size[0] - 1:
-                            if self.csr[0] + 1 - self.ActiveBox().pos[0] <= self.ActiveBox().y_items:
+                        if self.csr[0] + 10 < self.ActiveBox().pos[0] + self.ActiveBox().size[0] - 10:
+                            if self.csr[0] + 10 - self.ActiveBox().pos[0] <= self.ActiveBox().y_items:
                                 self.csr = (self.csr[0] + 10, self.csr[1])
                         else:
-                            self.ActiveBox().move_down()
+                            self.ActiveBox().move_down(10)
+                    if msg.code.code == 339:
+                        # What is the height?
+                        if self.csr[0] + 10 < self.ActiveBox().pos[0] + self.ActiveBox().size[0] - 10:
+                            if self.csr[0] + 10 - self.ActiveBox().pos[0] <= self.ActiveBox().y_items:
+                                self.csr = (self.csr[0] + 10, self.csr[1])
+                        else:
+                            self.ActiveBox().move_up(10)
         elif msg.mtype == 'MOVE_CURSOR':
             self.csr = msg.code
         elif msg.mtype == 'PRINT_DATA':
@@ -658,14 +669,14 @@ class boxWindow():
             self.draw_data = self.data[self.y_coord[0]:self.y_coord[1],self.x_coord[0]:self.x_coord[1]]
         else:
             self.draw_data = self.data[self.y_coord[0]:self.y_coord[1]]
-    def move_down(self):
+    def move_down(self, items=1):
         if self.y_coord[0] < 1000:
-            self.y_coord = (self.y_coord[0]+1, self.y_coord[1]+1)
+            self.y_coord = (self.y_coord[0]+items, self.y_coord[1]+items)
             self.updateDrawData()
             self.damaged = True
-    def move_up(self):
+    def move_up(self, items=1):
         if self.y_coord[0] > 0:
-            self.y_coord = (self.y_coord[0]-1, self.y_coord[1]-1)
+            self.y_coord = (self.y_coord[0]-items, self.y_coord[1]-items)
             self.updateDrawData()
             self.damaged = True
     def move_left(self):
