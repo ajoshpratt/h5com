@@ -1,3 +1,5 @@
+#! /usr/bin/env python2.7
+
 from __future__ import print_function, division; __metaclass__ = type
 
 import numpy as np
@@ -409,6 +411,14 @@ class TerminalPrinter(Systems):
                                 self.csr = (self.csr[0] - 10, self.csr[1])
                         else:
                             self.ActiveBox().move_up(10)
+            if self.State() == 'command':
+                if msg.code == '+':
+                    # What is the height?
+                    #print(msg.code)
+                    self.ActiveBox().move_layer_up()
+                if msg.code == '-':
+                    # What is the height?
+                    self.ActiveBox().move_layer_down()
         elif msg.mtype == 'MOVE_CURSOR':
             self.csr = msg.code
         elif msg.mtype == 'PRINT_DATA':
@@ -690,6 +700,18 @@ class boxWindow():
         self.x_coord = (self.x_coord[0]+1, self.x_coord[1]+1)
         self.updateDrawData()
         self.damaged = True
+    def move_layer_up(self):
+        if self.dim == 3:
+            if self.activeLayer < self.data.shape[2]-1:
+                self.activeLayer += 1
+                self.updateDrawData()
+                self.damaged = True
+    def move_layer_down(self):
+        if self.dim == 3:
+            if self.activeLayer > 0:
+                self.activeLayer -= 1
+                self.updateDrawData()
+                self.damaged = True
 
     # There's no real limit on how big a box can be, internally.
     # We just have a window into it, and that's the 'size'.
