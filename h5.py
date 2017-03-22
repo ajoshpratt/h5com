@@ -163,8 +163,13 @@ class AppState(Systems):
                         if self.storedCommand[1:] in i and self.potentialCommandId < ii:
                             self.potentialCommand = '/' + str(i)
                             self.potentialCommandId = ii
-                            self.tabWindow(i)
+                            self.modeWindow(self.potentialCommand)
                             break
+                if msg.code.code == self.terminal.KEY_BACKSPACE:
+                    self.potentialCommand = ''
+                    self.potentialCommandId = -1
+                    self.storeInput(msg.code)
+                    self.modeWindow(self.storedCommand)
                 if msg.code.code == self.terminal.KEY_ENTER:
                     self.storedCommand = self.potentialCommand
                     self.potentialCommand = ''
@@ -173,7 +178,8 @@ class AppState(Systems):
                     self.modeWindow(self.storedCommand)
                 else:
                     self.storeInput(msg.code)
-                    self.modeWindow(self.storedCommand)
+                    if self.potentialCommandId == -1:
+                        self.modeWindow(self.storedCommand)
             elif self.State == 'move':
                 if msg.code.code == self.terminal.KEY_LEFT:
                     self.nextBox()
