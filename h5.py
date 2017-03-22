@@ -328,6 +328,8 @@ class H5DataLoader(Systems):
 
     def prevGroup(self):
         currentGroup = '/' + str.join('/', list(filter(None, self.currentGroup.split('/')))[0:-1]) + '/'
+        if currentGroup[1] == '/':
+            currentGroup = currentGroup[1:]
         self.currentGroup = currentGroup
         self.statusWindow(self.currentGroup)
 
@@ -402,9 +404,9 @@ class TerminalPrinter(Systems):
                             self.ActiveBox().move_down(10)
                     if msg.code.code == 339:
                         # What is the height?
-                        if self.csr[0] + 10 < self.ActiveBox().pos[0] + self.ActiveBox().size[0] - 10:
-                            if self.csr[0] + 10 - self.ActiveBox().pos[0] <= self.ActiveBox().y_items:
-                                self.csr = (self.csr[0] + 10, self.csr[1])
+                        if self.csr[0] - 10 > self.ActiveBox().pos[0]:
+                            if self.csr[0] - 10 - self.ActiveBox().pos[0] >= 0:
+                                self.csr = (self.csr[0] - 10, self.csr[1])
                         else:
                             self.ActiveBox().move_up(10)
         elif msg.mtype == 'MOVE_CURSOR':
@@ -433,7 +435,8 @@ class TerminalPrinter(Systems):
         # but not the frame!
         for y in range(1, box.size[0]-1):
             for x in range(1, box.size[1]-1):
-                print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + '.')
+                # FILL CODE
+                print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + ' ')
 
     def drawBox(self, box):
         x_offset = 0
