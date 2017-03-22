@@ -403,37 +403,53 @@ class TerminalPrinter(Systems):
                         else:
                             self.ActiveBox().move_right()
                     elif msg.code.code == self.terminal.KEY_DOWN:
-                        if self.csr[0] + 1 < self.ActiveBox().pos[0] + self.ActiveBox().size[0] - 1:
-                            if self.csr[0] + 1 - self.ActiveBox().pos[0] <= self.ActiveBox().y_items:
-                                self.csr = (self.csr[0] + 1, self.csr[1])
+                        if self.ActiveBox().isGrid == False:
+                            if self.csr[0] + 1 < self.ActiveBox().pos[0] + self.ActiveBox().size[0] - 1:
+                                if self.csr[0] + 1 - self.ActiveBox().pos[0] <= self.ActiveBox().y_items:
+                                    self.csr = (self.csr[0] + 1, self.csr[1])
+                                    self.ActiveBox().damaged = True
+                            else:
+                                self.ActiveBox().move_down()
                                 self.ActiveBox().damaged = True
                         else:
                             self.ActiveBox().move_down()
                             self.ActiveBox().damaged = True
                     elif msg.code.code == self.terminal.KEY_UP:
-                        if self.csr[0] - 1 > self.ActiveBox().pos[0]:
-                            if self.csr[0] - 1 - self.ActiveBox().pos[0] >= 0:
-                                self.csr = (self.csr[0] - 1, self.csr[1])
-                                self.ActiveBox().damaged = True
+                        if self.ActiveBox().isGrid == False:
+                            if self.csr[0] - 1 > self.ActiveBox().pos[0]:
+                                if self.csr[0] - 1 - self.ActiveBox().pos[0] >= 0:
+                                    self.csr = (self.csr[0] - 1, self.csr[1])
+                                    self.ActiveBox().damaged = True
 
+                            else:
+                                self.ActiveBox().move_up()
+                                self.ActiveBox().damaged = True
                         else:
                             self.ActiveBox().move_up()
                             self.ActiveBox().damaged = True
                     # Temp standin for page down
                     elif msg.code.code == 338:
                         # What is the height?
-                        if self.csr[0] + 10 < self.ActiveBox().pos[0] + self.ActiveBox().size[0] - 10:
-                            if self.csr[0] + 10 - self.ActiveBox().pos[0] <= self.ActiveBox().y_items:
-                                self.csr = (self.csr[0] + 10, self.csr[1])
+                        if self.ActiveBox().isGrid == False:
+                            if self.csr[0] + 10 < self.ActiveBox().pos[0] + self.ActiveBox().size[0] - 10:
+                                if self.csr[0] + 10 - self.ActiveBox().pos[0] <= self.ActiveBox().y_items:
+                                    self.csr = (self.csr[0] + 10, self.csr[1])
+                                    self.ActiveBox().damaged = True
+                            else:
+                                self.ActiveBox().move_down(10)
                                 self.ActiveBox().damaged = True
                         else:
                             self.ActiveBox().move_down(10)
                             self.ActiveBox().damaged = True
                     if msg.code.code == 339:
                         # What is the height?
-                        if self.csr[0] - 10 > self.ActiveBox().pos[0]:
-                            if self.csr[0] - 10 - self.ActiveBox().pos[0] >= 0:
-                                self.csr = (self.csr[0] - 10, self.csr[1])
+                        if self.ActiveBox().isGrid == False:
+                            if self.csr[0] - 10 > self.ActiveBox().pos[0]:
+                                if self.csr[0] - 10 - self.ActiveBox().pos[0] >= 0:
+                                    self.csr = (self.csr[0] - 10, self.csr[1])
+                                    self.ActiveBox().damaged = True
+                            else:
+                                self.ActiveBox().move_up(10)
                                 self.ActiveBox().damaged = True
                         else:
                             self.ActiveBox().move_up(10)
@@ -461,6 +477,7 @@ class TerminalPrinter(Systems):
                 # ... now draw it.
                 if box.damaged == True:
                     self.clearBoxFast(box)
+                    #self.clearBox(box)
                     # THIS FUNCTION IS SUPER SLOW.
                     if box.decorate == True:
                         self.drawBox(box)
@@ -475,7 +492,7 @@ class TerminalPrinter(Systems):
         for y in range(1, box.size[0]-1):
             for x in range(1, box.size[1]-1):
                 # FILL CODE
-                print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + 'a')
+                print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + ' ')
 
     def clearBoxFast(self, box):
         for y in range(1, box.size[0]-1):
