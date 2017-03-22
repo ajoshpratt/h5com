@@ -1,5 +1,5 @@
-# h5com
-A sort of vaguely-working h5 file browser, ala midnight commander.
+# h5com - 'thief'
+A sort of vaguely-working h5 file browser, ala midnight commander/ranger (hence 'thief').
 
 Massive work in progress.
 
@@ -7,7 +7,7 @@ Requires numpy, h5py, and blessed, which can be installed through pip.  Works wi
 
 This is less of a program to fulfill a need (although I suppose it does that), and more of a way to play around with a message bus in the context of an end-user program in Python.  In addition, it's multithreaded (not that it needs to be).  Uses a modal motif, ala vim.
 
-```python h5.py filename```
+```thief filename```
 
 You should now be able to use the arrow keys to browse.  To open a group/dataset, hit enter.  To go back (either to the main pane, or just up in the hierarchy), hit del/backspace.  For N-D datasets, use plus or minus to change dimensions.
 

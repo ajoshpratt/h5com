@@ -1,0 +1,5 @@
+#! /bin/bash
+
+THIEF_PYTHON=`which python2.7`
+
+$THIEF_PYTHON h5.py $1
