@@ -377,18 +377,26 @@ class TerminalPrinter(Systems):
                 # ... so this global input keeps us moving around the current, active box.
                 if self.State() == 'insert' or self.State() == 'command':
                     if msg.code.code == self.terminal.KEY_LEFT:
-                        if self.csr[1] - 1 > self.ActiveBox().pos[1]:
-                            self.csr = (self.csr[0], self.csr[1] - 1)
+                        if self.ActiveBox().isGrid == False:
+                            if self.csr[1] - 1 > self.ActiveBox().pos[1]:
+                                self.csr = (self.csr[0], self.csr[1] - 1)
+                            else:
+                                self.ActiveBox().move_left()
                         else:
                             self.ActiveBox().move_left()
                     elif msg.code.code == self.terminal.KEY_RIGHT:
-                        if self.csr[1] + 1 < self.ActiveBox().pos[1] + self.ActiveBox().size[1] - 1:
-                            self.csr = (self.csr[0], self.csr[1] + 1)
+                        # Check if the active box is a grid.
+                        if self.ActiveBox().isGrid == False:
+                            if self.csr[1] + 1 < self.ActiveBox().pos[1] + self.ActiveBox().size[1] - 1:
+                                self.csr = (self.csr[0], self.csr[1] + 1)
+                            else:
+                                # Useful for debugging.
+                                newmsg = Msg('print_data', mtype='PRINT_COMMAND', code=(self.ActiveBox().x_coord, self.ActiveBox().data.shape[1]))
+                                #msg.mtype = mtype='PRINT_COMMAND'
+                                #msg.code.code = (self.ActiveBox().x_coord, self.ActiveBox().data.shape[0])
+                                #self.SendMessage(newmsg)
+                                self.ActiveBox().move_right()
                         else:
-                            newmsg = Msg('print_data', mtype='PRINT_COMMAND', code=(self.ActiveBox().x_coord, self.ActiveBox().data.shape[1]))
-                            #msg.mtype = mtype='PRINT_COMMAND'
-                            #msg.code.code = (self.ActiveBox().x_coord, self.ActiveBox().data.shape[0])
-                            self.SendMessage(newmsg)
                             self.ActiveBox().move_right()
                     elif msg.code.code == self.terminal.KEY_DOWN:
                         if self.csr[0] + 1 < self.ActiveBox().pos[0] + self.ActiveBox().size[0] - 1:
@@ -648,20 +656,21 @@ class boxWindow():
         # Let's say we always want to show... oh, 4 digits.
         # How many cells do we have?  Well, we need space, so that's 6 for each...
         self.n_digits = 4
-        #self.cells = 10
-        self.cells = 20
+        try:
+            self.cells = min((int(np.floor(self.size[1]/(self.n_digits+5)))) - 1, data.shape[1]-1)
+        except:
+            self.cells = 1
         self.x_coord = (0, self.cells)
         self.data = data
         self.damaged = True
         self.decorate = True
         self.isGrid = False
         self.y_items = 0
+        # Let's set it to layer 0, here...
         if self.data != None:
             self.sort_data()
-        try:
-            self.cells = min((int(np.floor(self.size[1]/(self.n_digits+5)))) - 1, data.shape[1])
-        except:
-            self.cells = 1
+        self.activeLayer = 0
+        self.updateDrawData()
     def sort_data(self):
         # It works by drawing lines.
         # Let's assume the data is brought in as a list or numpy array.  It's not hard, whatever.
@@ -682,9 +691,6 @@ class boxWindow():
         else:
             self.layers = self.data.shape[2]
             self.y_items = self.data.shape[0]
-        # Let's set it to layer 0, here...
-        self.activeLayer = 0
-        self.updateDrawData()
     def updateDrawData(self):
         if self.dim == 3:
             self.draw_data = self.data[self.y_coord[0]:self.y_coord[1],self.x_coord[0]:self.x_coord[1],self.activeLayer]
@@ -708,7 +714,13 @@ class boxWindow():
             self.updateDrawData()
             self.damaged = True
     def move_right(self):
-        if self.x_coord[1] <= self.data.shape[1]:
+        # If this doesn't work, then eh.
+        # If we have a complex datatype with N values, we'll need to figure that out.
+        if len(self.data.shape) > 1:
+            comparison = self.data.shape[1]
+        else:
+            comparison = len(self.data.dtype)
+        if self.x_coord[1] <= comparison:
             self.x_coord = (self.x_coord[0]+1, self.x_coord[1]+1)
             self.updateDrawData()
             self.damaged = True
