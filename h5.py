@@ -317,6 +317,10 @@ class H5DataLoader(Systems):
             msg = Msg('new_box', mtype='NEW_BOX', code=box)
             self.SendMessage(msg)
             msg = Msg('new_box', mtype='ACTIVATE_BOX', code=box)
+            try:
+                self.ActiveBox().damaged = False
+            except:
+                pass
             self.SendMessage(msg)
             self.statusWindow(self.currentGroup)
 
@@ -456,7 +460,8 @@ class TerminalPrinter(Systems):
             for box in self.Boxes[level].values():
                 # ... now draw it.
                 if box.damaged == True:
-                    self.clearBox(box)
+                    self.clearBoxFast(box)
+                    # THIS FUNCTION IS SUPER SLOW.
                     if box.decorate == True:
                         self.drawBox(box)
                     if box.isGrid == False:
@@ -470,7 +475,14 @@ class TerminalPrinter(Systems):
         for y in range(1, box.size[0]-1):
             for x in range(1, box.size[1]-1):
                 # FILL CODE
-                print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + ' ')
+                print(self.terminal.move(y+box.pos[0],x+box.pos[1]) + 'a')
+
+    def clearBoxFast(self, box):
+        for y in range(1, box.size[0]-1):
+            #clearstring = str('|'*(box.size[1]-2) + '\n')*(box.size[0]-2)
+            clearstring = str(' '*(box.size[1]-1))
+            print(self.terminal.move(box.pos[0]+y,box.pos[1]) + clearstring)
+        #clearstring = str((box.size))
 
     def drawBox(self, box):
         x_offset = 0
