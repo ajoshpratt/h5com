@@ -123,12 +123,16 @@ class AppState(Systems):
         Systems.__init__(self, MsgBusInstance)
         self.terminal = terminal
         self.ActiveBox = None
+        self.ActiveKeys = None
         self.Boxes = [{}]
         self.h5file = h5file
         # Possible states: insert, command
         self.State = 'command'
         self.h = self.terminal.height
         self.w = self.terminal.width
+        self.storedCommand = '/'
+        self.potentialCommand = ''
+        self.potentialCommandId = -1
     def MainLoop(self):
         # We're setting up the first box, as we start the program...
         #self.h = self.terminal.height
@@ -143,10 +147,33 @@ class AppState(Systems):
             self.SortMessages()
             self.end_clock()
     def HandleMessage(self, msg):
+        if msg.mtype == 'RETURN_CURRENT_KEYS':
+            self.ActiveKeys = msg.code
         if msg.mtype == 'INPUT':
             if msg.code.code == self.terminal.KEY_ESCAPE:
                 self.State = 'command'
                 self.modeWindow(self.State)
+            elif self.State == '/':
+                # We're going into 'terminal' mode.
+                # If we're not using tab...
+                if msg.code.code == 512:
+                    if self.potentialCommandId >= len(self.ActiveKeys)-1:
+                        self.potentialCommandId = -1
+                    for ii,i in enumerate(self.ActiveKeys):
+                        if self.storedCommand[1:] in i and self.potentialCommandId < ii:
+                            self.potentialCommand = '/' + str(i)
+                            self.potentialCommandId = ii
+                            self.tabWindow(i)
+                            break
+                if msg.code.code == self.terminal.KEY_ENTER:
+                    self.storedCommand = self.potentialCommand
+                    self.potentialCommand = ''
+                    self.potentialCommandId = -1
+                    self.storeInput(msg.code)
+                    self.modeWindow(self.storedCommand)
+                else:
+                    self.storeInput(msg.code)
+                    self.modeWindow(self.storedCommand)
             elif self.State == 'move':
                 if msg.code.code == self.terminal.KEY_LEFT:
                     self.nextBox()
@@ -155,15 +182,21 @@ class AppState(Systems):
             elif self.State == 'command':
                 # Move windows, if necessary.  We already know we have an input message...
 
-                if msg.code == 'l':
-                    msg = Msg('new_box', mtype='H5_LOAD', code=None)
-                    self.SendMessage(msg)
+                #if msg.code == 'l':
+                #    msg = Msg('new_box', mtype='H5_LOAD', code=None)
+                #    self.SendMessage(msg)
                 if msg.code == 'i':
                     self.State = 'insert'
                     self.modeWindow(self.State)
                 if msg.code == 'm':
                     self.State = 'move'
                     self.modeWindow(self.State)
+                if msg.code == '/':
+                    self.State = '/'
+                    self.modeWindow(self.State)
+                    # Let's get the current active keys!
+                    newmsg = Msg('input!', mtype='H5_RETURN_CURRENT_KEYS', code={})
+                    self.SendMessage(newmsg)
                 if msg.code == 'e':
                     for i in range(0, 8):
                         msg = Msg('input!', mtype='INPUT', code=Msg('', mtype='', code=self.terminal.KEY_RIGHT))
@@ -176,10 +209,10 @@ class AppState(Systems):
                 #    self.SendMessage(msg)
                 if msg.code == 'q':
                     self.MsgBus.KillSystems()
-                if msg.code == 'P':
-                    string = 'Hey!  This is a test message that we are sending when something happens.  Can I write to the correct window?  LET US FIND OUT.'
-                    msg = Msg('print_data', mtype='PRINT_DATA', code={ 'box': self.ActiveBox, 'data': string })
-                    self.SendMessage(msg)
+                #if msg.code == 'P':
+                #    string = 'Hey!  This is a test message that we are sending when something happens.  Can I write to the correct window?  LET US FIND OUT.'
+                #    msg = Msg('print_data', mtype='PRINT_DATA', code={ 'box': self.ActiveBox, 'data': string })
+                #    self.SendMessage(msg)
                 if msg.code != None:
                     if msg.code.code == self.terminal.KEY_BACKSPACE or msg.code.code == self.terminal.KEY_DELETE:
                         # Now we'll try and load up a dataset, and print it to another window... or just modify the current, maybe?  We'll see.
@@ -203,7 +236,7 @@ class AppState(Systems):
         elif msg.mtype == 'NEW_BOX':
             # Stored in the code is the box object information
             self.registerNewBox(msg.code)
-            self.State = 'command'
+            #self.State = 'command'
         elif msg.mtype == 'PRINT_COMMAND':
             self.modeWindow(msg.code)
 
@@ -213,6 +246,27 @@ class AppState(Systems):
         box.damaged = True
         msg = Msg('new_box', mtype='NEW_BOX', code=box)
         self.SendMessage(msg)
+
+    def tabWindow(self, dataset):
+        box = boxWindow(size=(3, int(self.w)), pos=(int(self.h-3),int(1)), level=3, name='tab', data=[dataset])
+        box.decorate = False
+        box.damaged = True
+        msg = Msg('new_box', mtype='NEW_BOX', code=box)
+        self.SendMessage(msg)
+
+    def storeInput(self, char):
+        if char.code == self.terminal.KEY_ENTER:
+            msg = Msg('handle_input', mtype='H5_USER_LOAD', code=self.storedCommand[1:])
+            self.SendMessage(msg)
+            self.storedCommand = '/'
+            self.State = 'command'
+            self.modeWindow(self.State)
+        elif char.code == 330:
+            self.storedCommand = self.storedCommand[:-1]
+        elif char.code == 512:
+            pass
+        else:
+            self.storedCommand += char
 
     def nextBox(self):
         stop_next = False
@@ -279,6 +333,9 @@ class H5DataLoader(Systems):
     def HandleMessage(self, msg):
         # We need to set a current dataset/group...
         # When we print a message to the terminal, we want what dataset we get to... well, we'll just see.
+        if msg.mtype == 'H5_RETURN_CURRENT_KEYS':
+            msg = Msg('print_data', mtype='RETURN_CURRENT_KEYS', code=self.returnGroupKeys(self.currentGroup))
+            self.SendMessage(msg)
         if msg.mtype == 'H5_PRINT_CURRENT':
             self.printGroupKeys(self.currentGroup, self.ActiveBox())
         if msg.mtype == 'H5_GET_DATASET':
@@ -323,6 +380,33 @@ class H5DataLoader(Systems):
                 pass
             self.SendMessage(msg)
             self.statusWindow(self.currentGroup)
+        if msg.mtype == 'H5_USER_LOAD':
+            group = str(self.currentGroup)
+            try:
+                self.changeGroup(msg.code)
+                try:
+                    # This shouldn't really be happening unless we ACTUALLY change groups.  But hey...
+                    self.returnGroupKeys(self.currentGroup)
+                    box = boxWindow(size=(int(self.h-5), int(self.w/4)), pos=(int(1),int(1)), level=1, name='Main', data=self.ActiveKeys)
+                except:
+                    self.returnDataset(self.currentGroup)
+                    box = boxWindow(size=(int(self.h-5), int(self.w/4*3)-5), pos=(int(1),int(self.w/4)+5), level=2, name='Data', data=self.data)
+                    box.isGrid = True
+                msg = Msg('new_box', mtype='NEW_BOX', code=box)
+                self.SendMessage(msg)
+                msg = Msg('new_box', mtype='ACTIVATE_BOX', code=box)
+                try:
+                    self.ActiveBox().damaged = False
+                except:
+                    pass
+                self.SendMessage(msg)
+                self.statusWindow(self.currentGroup)
+            except:
+                self.currentGroup = group
+                self.statusWindow(self.currentGroup)
+                msg = Msg('print_data', mtype='H5_GROUP', code=self.currentGroup)
+                self.SendMessage(msg)
+            # We'll just check to see if it's a group.  Otherwise, it's a dataset.
 
     def statusWindow(self, dataset):
         box = boxWindow(size=(3, int(self.w)), pos=(int(self.h-3),int(1)), level=1, name='Status', data=[dataset])
@@ -346,6 +430,7 @@ class H5DataLoader(Systems):
         for key, value in self.h5[group].items():
             # Should we do it here, or have the other sort it out?
             self.ActiveKeys.append(key)
+        return self.ActiveKeys
 
     def returnDataset(self, group):
         #self.data = []
